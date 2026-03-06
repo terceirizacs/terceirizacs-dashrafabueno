@@ -338,11 +338,11 @@ const fmtN=n=>n.toLocaleString('pt-BR');
 const fmtR=n=>'R$ '+Math.round(n).toLocaleString('pt-BR');
 const fmtRS=n=>{if(n>=1000000)return'R$ '+(n/1000000).toFixed(1).replace('.',',')+' M';return fmtR(n);};
 const fmtP=n=>n.toFixed(1).replace('.',',')+' %';
-const funilOrder=['Nunca acessou','Onboarding','Desengajado','Engajado','Recompra'];
-const funilColors=['var(--pink)','var(--orange)','var(--red)','var(--teal)','var(--green)'];
-const funilBg=['rgba(244,114,182,.12)','rgba(251,146,60,.12)','rgba(248,113,113,.12)','rgba(45,212,191,.12)','rgba(52,211,153,.12)'];
+const funilOrder=['Nunca acessou','Onboarding','Desengajado','Recompra'];
+const funilColors=['var(--pink)','var(--orange)','var(--red)','var(--green)'];
+const funilBg=['rgba(244,114,182,.12)','rgba(251,146,60,.12)','rgba(248,113,113,.12)','rgba(52,211,153,.12)'];
 const progOrder=['0','1-10','11-20','21-30','31-40','41-50','51-60','61-70','71-80','81-90','91-100'];
-const progColors=['var(--red)','var(--pink)','var(--orange)','var(--gold)','var(--sky)','var(--cyan)','var(--teal)','var(--green)','var(--accent)','var(--a2)','#fff'];
+const progColors=['var(--red)','var(--pink)','var(--orange)','var(--gold)','var(--sky)','var(--cyan)','var(--teal)','var(--green)','var(--accent)','var(--a2)','var(--sky)'];
 const tipoColors={'BUYER':'var(--green)','IMPORTED':'var(--accent)','GUEST':'var(--gold)','FREE':'var(--sky)'};
 
 let RAW_DATA=null;let TODAY_MS=0;
@@ -430,8 +430,9 @@ function aggregate(rows){
   const a={total:rows.length,funil:{},faixaProg:{},faixaDias:{},tipoAluno:{},progVals:[],acessosMes:[],acessou:0,nuncaAcessou:0,
     ativos:0,bloqueados:0,aulasComp:{base:[],asc:[]},totalAulas:{base:[],asc:[]},
     fin:{compras_v:0,compras_n:0,reembolso_v:0,reembolso_n:0,chargeback_v:0,chargeback_n:0,cancelado_v:0,cancelado_n:0},
-    emails:{base:new Set(),asc:new Set()},progPorEmail:{},
+    emails:{base:new Set(),asc:new Set(),black:new Set()},progPorEmail:{},
     reemb30:{n:0,v:0},reemb60:{n:0,v:0},reemb90:{n:0,v:0},
+    vendas30:{n:0,v:0},vendas60:{n:0,v:0},vendas90:{n:0,v:0},
     produtos:new Set()};
   const d30=TODAY_MS-30*86400000,d60m=TODAY_MS-60*86400000,d90=TODAY_MS-90*86400000;
   rows.forEach(r=>{
@@ -452,14 +453,14 @@ function aggregate(rows){
     const aggKey=(pKey==='base')?'base':'asc';
     if(r[R.AULAS]!==null)a.aulasComp[aggKey].push(r[R.AULAS]);
     if(r[R.TOTAL_AULAS]!==null)a.totalAulas[aggKey].push(r[R.TOTAL_AULAS]);
-    if(r[R.EMAIL])a.emails[aggKey].add(r[R.EMAIL]);
+    if(r[R.EMAIL]){if(pKey==='base')a.emails.base.add(r[R.EMAIL]);else if(pKey==='asc')a.emails.asc.add(r[R.EMAIL]);else if(pKey==='black')a.emails.black.add(r[R.EMAIL]);}
     if(r[R.EMAIL]&&r[R.PROG]!==null){
       if(!a.progPorEmail[r[R.EMAIL]])a.progPorEmail[r[R.EMAIL]]={};
       const prev=a.progPorEmail[r[R.EMAIL]][r[R.PRODUTO]];
       if(prev===undefined||r[R.PROG]>prev)a.progPorEmail[r[R.EMAIL]][r[R.PRODUTO]]=r[R.PROG];
     }
     if(r[R.VALOR]>0&&r[R.STATUS_COMPRA]){
-      if(r[R.STATUS_COMPRA]==='COMPLETE'||r[R.STATUS_COMPRA]==='APPROVED'){a.fin.compras_v+=r[R.VALOR];a.fin.compras_n++;}
+      if(r[R.STATUS_COMPRA]==='COMPLETE'||r[R.STATUS_COMPRA]==='APPROVED'){a.fin.compras_v+=r[R.VALOR];a.fin.compras_n++;if(r[R.DT_APROV]){if(r[R.DT_APROV]>=d30){a.vendas30.n++;a.vendas30.v+=r[R.VALOR];}if(r[R.DT_APROV]>=d60m){a.vendas60.n++;a.vendas60.v+=r[R.VALOR];}if(r[R.DT_APROV]>=d90){a.vendas90.n++;a.vendas90.v+=r[R.VALOR];}}}
       else if(r[R.STATUS_COMPRA]==='REFUNDED'){
         a.fin.reembolso_v+=r[R.VALOR];a.fin.reembolso_n++;
         if(r[R.DT_APROV]){
@@ -486,140 +487,109 @@ function renderAll(rows){
   const perda=f.reembolso_v+f.chargeback_v+f.cancelado_v;
   const bruto=f.compras_v+perda;const ttx=f.compras_n+f.reembolso_n+f.chargeback_n+f.cancelado_n;
   const pctPerda=bruto>0?perda/bruto*100:0;const pctReemb=ttx>0?f.reembolso_n/ttx*100:0;
-  const avgProg=rd(avg(a.progVals));const avgAcsMes=rd(avg(a.acessosMes));
-  const pctNunca=a.total>0?rd(a.nuncaAcessou/a.total*100):0;const pctAcessou=a.total>0?rd(a.acessou/a.total*100):0;
-  const pctAtivos=a.total>0?rd(a.ativos/a.total*100):0;const pctBloq=a.total>0?rd(a.bloqueados/a.total*100):0;
-  const fp=getMS('fProduto');const produtoFiltrado=fp.length>0;const isSingleProd=fp.length===1;const singleProd=isSingleProd?fp[0]:null;
-  const fcl=getMS('fStatusClub');
+  const fp=getMS('fProduto');const isSingleProd=fp.length===1;const singleProd=isSingleProd?fp[0]:null;
+
+  // Filtrar rows SEM Povo Academy para KPIs, Funil, Progresso
+  const rowsSemPovo=rows.filter(r=>normProd(r[R.PRODUTO])!=='asc');
+  const aSP=aggregate(rowsSemPovo);
+  const avgProgSP=rd(avg(aSP.progVals));
+  const pctNuncaSP=aSP.total>0?rd(aSP.nuncaAcessou/aSP.total*100):0;
+  const pctAcessouSP=aSP.total>0?rd(aSP.acessou/aSP.total*100):0;
+
+  // Ascensão: % que comprou qualquer produto e ascendeu ao Povo Academy
+  const allEmailsBase=new Set(),allEmailsAsc=new Set();
+  rows.forEach(r=>{if(r[R.EMAIL]){const np=normProd(r[R.PRODUTO]);if(np==='base'||np==='black')allEmailsBase.add(r[R.EMAIL]);if(np==='asc')allEmailsAsc.add(r[R.EMAIL]);}});
+  let ascCount=0;allEmailsAsc.forEach(e=>{if(allEmailsBase.has(e))ascCount++;});
+  const pctAscensao=allEmailsBase.size>0?rd(ascCount/allEmailsBase.size*100):0;
 
   // ========== TAB 1: VISÃO GERAL ==========
   let h1='';
   h1+='<div class="kpis">';
-  h1+=kpiCard('linear-gradient(90deg,var(--accent),var(--a2))','Total Alunos',fmtN(a.total),'','var(--a2)');
-  h1+=kpiCard('linear-gradient(90deg,var(--teal),var(--green))','Média Progresso',fmtP(avgProg),'','var(--teal)');
-  h1+=kpiCard('linear-gradient(90deg,var(--sky),var(--cyan))','Acessos / Mês',avgAcsMes.toFixed(1).replace('.',','),'média mensal','var(--sky)');
-  h1+=kpiCard('linear-gradient(90deg,var(--red),var(--pink))','Nunca Acessaram',fmtP(pctNunca),a.nuncaAcessou+' alunos','var(--red)');
+  h1+=kpiCard('linear-gradient(90deg,var(--accent),var(--a2))','Total Alunos',fmtN(aSP.total),'sem Povo Academy','var(--a2)');
+  h1+=kpiCard('linear-gradient(90deg,var(--teal),var(--green))','Média Progresso',fmtP(avgProgSP),'sem Povo Academy','var(--teal)');
+  h1+=kpiCard('linear-gradient(90deg,var(--sky),var(--cyan))','Ascensão p/ Povo',fmtP(pctAscensao),ascCount+' de '+allEmailsBase.size+' ascenderam','var(--sky)');
+  h1+=kpiCard('linear-gradient(90deg,var(--red),var(--pink))','Nunca Acessaram',fmtP(pctNuncaSP),aSP.nuncaAcessou+' alunos','var(--red)');
   h1+='</div>';
 
-  // Renovação de Acesso
-  const showRetencao=false;
-  if(showRetencao){
-  h1+='<div class="sec">📊 Renovação de Acesso</div>';
-  h1+='<div class="g2"><div class="card"><h3>Ativos vs Bloqueados</h3><div class="d">Proporção de ativos vs bloqueados (não renovou o acesso)</div>';
-  h1+='<div class="retention-bar"><div class="retention-fill" style="width:'+Math.max(pctAtivos,2)+'%;background:var(--green)">'+fmtP(pctAtivos)+'</div><div class="retention-fill" style="width:'+Math.max(pctBloq,2)+'%;background:var(--red);opacity:.7">'+fmtP(pctBloq)+'</div></div>';
-  h1+='<div style="display:flex;justify-content:space-between;margin-top:14px;font-size:13px;color:var(--t2)"><span>🟢 '+fmtN(a.ativos)+' ativos</span><span>🔴 '+fmtN(a.bloqueados)+' bloqueados</span></div></div>';
-  const degA=Math.round(pctAtivos/100*360);
-  h1+='<div class="card"><h3>Distribuição Visual</h3><div class="d">Ativos vs bloqueados</div><div class="donut-area">';
-  h1+=donutHTML('var(--green)',degA,'var(--red)',fmtP(pctAtivos),'ativos','Ativos: '+fmtN(a.ativos)+' · Bloqueados: '+fmtN(a.bloqueados),'Ativos',fmtN(a.ativos),'var(--green)','Bloqueados',fmtN(a.bloqueados),'var(--red)');
-  h1+='</div></div></div>';
-  }
-
-  // Jornada do Aluno (Funil)
+  // Jornada do Aluno (Funil) — sem Povo Academy
   h1+='<div class="sec">📊 Jornada do Aluno</div>';
-  const fd=funilOrder.map(f=>a.funil[f]||0);const mxF=Math.max(...fd,1);
-  h1+='<div class="g2"><div class="card"><h3>Distribuição da Jornada</h3><div class="d">Classificação por progresso e acesso</div><div class="chart"><div class="chart-bars">';
-  funilOrder.forEach((f,i)=>{const q=fd[i];const hh=Math.round(q/mxF*90);const pc=a.total>0?q/a.total*100:0;h1+='<div class="bar" style="height:'+hh+'%;background:'+funilColors[i]+'"><span style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:11px;font-family:JetBrains Mono;font-weight:600;color:var(--t1);white-space:nowrap">'+pc.toFixed(1)+'%</span><span class="tt">'+f+': '+q+' ('+fmtP(pc)+')</span></div>';});
+  const fd=funilOrder.map(f=>aSP.funil[f]||0);const mxF=Math.max(...fd,1);
+  h1+='<div class="g2"><div class="card"><h3>Distribuição da Jornada</h3><div class="d">Classificação por progresso e acesso (sem Povo Academy)</div><div class="chart"><div class="chart-bars">';
+  funilOrder.forEach((f,i)=>{const q=fd[i];const hh=Math.round(q/mxF*90);const pc=aSP.total>0?q/aSP.total*100:0;h1+='<div class="bar" style="height:'+hh+'%;background:'+funilColors[i]+'"><span style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:11px;font-family:JetBrains Mono;font-weight:600;color:var(--t1);white-space:nowrap">'+pc.toFixed(1)+'%</span><span class="tt">'+f+': '+q+' ('+fmtP(pc)+')</span></div>';});
   h1+='</div><div class="chart-labels">';funilOrder.forEach(f=>{h1+='<div class="chart-lbl">'+f+'</div>';});
   h1+='</div></div></div>';
-  h1+='<div class="card"><h3>Detalhamento da Jornada</h3><div class="d">Quantidade e % por etapa</div>';
-  funilOrder.forEach((f,i)=>{const q=fd[i];const pc=a.total>0?q/a.total*100:0;h1+='<div class="ft-row"><span class="ft-tag" style="background:'+funilBg[i]+';color:'+funilColors[i]+'">'+f+'</span><span class="ft-qty"'+(f==='Recompra'?' style="color:var(--green)"':'')+'>'+fmtN(q)+'</span><span class="ft-pct">'+fmtP(pc)+'</span><div class="ft-track"><div class="ft-fill" style="width:'+pc.toFixed(1)+'%;background:'+funilColors[i]+'"></div></div></div>';});
+  h1+='<div class="card"><h3>Detalhamento da Jornada</h3><div class="d">Quantidade e % por etapa (sem Povo Academy)</div>';
+  funilOrder.forEach((f,i)=>{const q=fd[i];const pc=aSP.total>0?q/aSP.total*100:0;h1+='<div class="ft-row"><span class="ft-tag" style="background:'+funilBg[i]+';color:'+funilColors[i]+'">'+f+'</span><span class="ft-qty"'+(f==='Recompra'?' style="color:var(--green)"':'')+'>'+fmtN(q)+'</span><span class="ft-pct">'+fmtP(pc)+'</span><div class="ft-track"><div class="ft-fill" style="width:'+pc.toFixed(1)+'%;background:'+funilColors[i]+'"></div></div></div>';});
   h1+='</div></div>';
 
-  // Perfil da Base
-  h1+='<div class="sec">👥 Perfil da Base</div><div class="g2">';
-  const ta=a.tipoAluno;const taKeys=Object.keys(ta).sort((x,y)=>(ta[y]||0)-(ta[x]||0));const taTotal=taKeys.reduce((s,k)=>s+(ta[k]||0),0);
-  let conic='',deg=0,legH='';
-  taKeys.forEach((k,i)=>{const pc=taTotal>0?ta[k]/taTotal*100:0;const dd=Math.round(pc/100*360);const c=tipoColors[k]||'var(--t2)';conic+=(i>0?',':'')+c+' '+deg+'deg '+(deg+dd)+'deg';legH+='<span><i style="background:'+c+'"></i>'+k+' ('+ta[k]+')</span>';deg+=dd;});
-  if(!conic)conic='var(--t3) 0deg 360deg';
-  const ttTipo=taKeys.map(k=>k+': '+ta[k]+' ('+(taTotal>0?(ta[k]/taTotal*100).toFixed(1):0)+'%)').join(' · ');
-  h1+='<div class=\"card\" style=\"display:none\"><h3>Tipo de Aluno</h3><div class="d">Distribuição por categoria</div><div class="donut-area"><div class="donut-ring" style="background:conic-gradient('+conic+')"><span class="tt">'+ttTipo+'</span><div style="width:120px;height:120px;background:var(--donut-hole);border-radius:50%;display:flex;align-items:center;justify-content:center"><div class="donut-center"><div class="donut-v" style="color:var(--accent)">'+fmtN(taTotal)+'</div><div class="donut-lbl">alunos</div></div></div></div><div class="donut-legend">'+legH+'</div></div></div>';
-  const baseC=rows.filter(r=>normProd(r[R.PRODUTO])==='base').length;const ascC=rows.filter(r=>normProd(r[R.PRODUTO])==='asc').length;
-  const degProd=a.total>0?Math.round(baseC/a.total*360):0;
-  h1+='<div class="card"><h3>Distribuição por Produto</h3><div class="d">Quantidade de alunos</div><div class="donut-area">'+donutHTML('var(--accent)',degProd,'var(--teal)',fmtP(a.total>0?rd(baseC/a.total*100):0),'base','0 a 100k: '+fmtN(baseC)+' ('+fmtP(a.total>0?rd(baseC/a.total*100):0)+') · Povo Academy: '+fmtN(ascC)+' ('+fmtP(a.total>0?rd(ascC/a.total*100):0)+')','0 a 100k com a Rafa',fmtN(baseC)+' ('+fmtP(a.total>0?rd(baseC/a.total*100):0)+')','var(--accent)','Povo Academy',fmtN(ascC)+' ('+fmtP(a.total>0?rd(ascC/a.total*100):0)+')','var(--teal)')+'</div></div></div>';
+  // Perfil da Base — Distribuição por Produto (base + black + povo)
+  h1+='<div class="sec">👥 Perfil da Base</div>';
+  const baseC=rows.filter(r=>normProd(r[R.PRODUTO])==='base').length;
+  const blackC=rows.filter(r=>normProd(r[R.PRODUTO])==='black').length;
+  const ascC=rows.filter(r=>normProd(r[R.PRODUTO])==='asc').length;
+  const outrosC=a.total-baseC-blackC-ascC;
+  const prodData=[['0 a 100k com a Rafa',baseC,'var(--accent)'],['Black & Combo',blackC,'var(--pink)'],['Povo Academy',ascC,'var(--teal)']];
+  if(outrosC>0)prodData.push(['Outros',outrosC,'var(--t3)']);
+  const prodTotal=prodData.reduce((s,p)=>s+p[1],0);
+  let conicProd='',degProd=0,legProd='';
+  prodData.forEach((p,i)=>{const pc=prodTotal>0?p[1]/prodTotal*100:0;const dd=Math.round(pc/100*360);conicProd+=(i>0?',':'')+p[2]+' '+degProd+'deg '+(degProd+dd)+'deg';legProd+='<span><i style="background:'+p[2]+'"></i>'+p[0]+' ('+fmtN(p[1])+')</span>';degProd+=dd;});
+  if(!conicProd)conicProd='var(--t3) 0deg 360deg';
+  h1+='<div class="card"><h3>Distribuição por Produto</h3><div class="d">Quantidade de alunos por produto</div><div class="donut-area"><div class="donut-ring" style="background:conic-gradient('+conicProd+')"><span class="tt">'+prodData.map(p=>p[0]+': '+p[1]).join(' · ')+'</span><div style="width:120px;height:120px;background:var(--donut-hole);border-radius:50%;display:flex;align-items:center;justify-content:center"><div class="donut-center"><div class="donut-v" style="color:var(--accent)">'+fmtN(prodTotal)+'</div><div class="donut-lbl">alunos</div></div></div></div><div class="donut-legend">'+legProd+'</div></div></div>';
 
   // Insights Visão Geral
   h1+='<div class="sec">💡 Insights — Visão Geral</div><div class="ins-g">';
-  if(pctBloq>50)h1+='<div class="ins w"><div class="ins-t">🔒 '+fmtP(pctBloq)+' da base bloqueada (não renovou)</div><div class="ins-p">'+fmtN(a.bloqueados)+' bloqueados. '+fmtN(a.ativos)+' ativos ('+fmtP(pctAtivos)+').</div></div>';
-  if(pctAcessou>90)h1+='<div class="ins ok"><div class="ins-t">✅ Base ativa: '+fmtP(pctAcessou)+' acessou</div><div class="ins-p">Foco em engajamento e conclusão.</div></div>';
+  if(pctAcessouSP>90)h1+='<div class="ins ok"><div class="ins-t">✅ Base ativa: '+fmtP(pctAcessouSP)+' acessou</div><div class="ins-p">Foco em engajamento e conclusão.</div></div>';
+  if(pctNuncaSP>30)h1+='<div class="ins w"><div class="ins-t">⚠️ '+fmtP(pctNuncaSP)+' nunca acessaram</div><div class="ins-p">'+aSP.nuncaAcessou+' alunos que compraram e não acessaram o curso.</div></div>';
+  if(pctAscensao>0)h1+='<div class="ins i"><div class="ins-t">🚀 Ascensão: '+fmtP(pctAscensao)+' compraram Povo Academy</div><div class="ins-p">'+ascCount+' alunos de '+allEmailsBase.size+' ascenderam para o Povo Academy.</div></div>';
   h1+='</div>';
   document.getElementById('contentGeral').innerHTML=h1;
 
   // ========== TAB 2: ENGAJAMENTO DO ALUNO ==========
   let h2='';
-  // Progresso
-  h2+='<div class="sec">📈 Progresso & Aulas</div><div class="g2">';
-  const pd=progOrder.map(f=>a.faixaProg[f]||0);const mxP=Math.max(...pd,1);
-  h2+='<div class="card"><h3>Faixa de Progresso</h3><div class="d">Distribuição por faixa de conclusão</div><div class="prog-area"><div class="prog-bars">';
-  progOrder.forEach((f,i)=>{const hh=Math.round(pd[i]/mxP*90);const pc=a.total>0?pd[i]/a.total*100:0;h2+='<div class="prog-bar" style="height:'+hh+'%;background:'+progColors[i]+'"><span class="prog-pct">'+pc.toFixed(1)+'%</span><span class="tt">'+f+'%: '+pd[i]+' ('+pc.toFixed(1)+'%)</span></div>';});
+  // Progresso — sem Povo Academy
+  const pdSP=progOrder.map(f=>aSP.faixaProg[f]||0);const mxP=Math.max(...pdSP,1);
+  h2+='<div class="sec">📈 Faixa de Engajamento</div>';
+  h2+='<div class="card"><h3>Faixa de Progresso</h3><div class="d">Distribuição por faixa de conclusão (sem Povo Academy)</div><div class="prog-area"><div class="prog-bars">';
+  progOrder.forEach((f,i)=>{const hh=Math.round(pdSP[i]/mxP*90);const pc=aSP.total>0?pdSP[i]/aSP.total*100:0;h2+='<div class="prog-bar" style="height:'+hh+'%;background:'+progColors[i]+'"><span class="prog-pct">'+pc.toFixed(1)+'%</span><span class="tt">'+f+'%: '+pdSP[i]+' ('+pc.toFixed(1)+'%)</span></div>';});
   h2+='</div><div class="prog-labels">';progOrder.forEach(f=>{h2+='<div class="prog-lbl">'+f+'%</div>';});h2+='</div></div></div>';
-  // Aulas
-  h2+='<div class="card"><h3>Total de Aulas vs Média Assistida</h3>';
-  if(isSingleProd){
-    const key=normProd(singleProd);const aggKey=(key==='base')?'base':'asc';const tA=moda(a.totalAulas[aggKey]);const mA=rd(avg(a.aulasComp[aggKey]));const pA=tA>0?mA/tA*100:0;
-    h2+='<div class="d">'+tA+' aulas · média '+mA.toFixed(1).replace('.',',')+' assistidas ('+pA.toFixed(1)+'%)</div>';
-    h2+='<div class="hbar-area" style="height:auto;gap:24px"><div class="hbar-row"><span class="hbar-lbl">Total de Aulas</span><div class="hbar-track"><div class="hbar-fill" style="width:100%;background:var(--accent)">'+tA+' aulas</div></div></div>';
-    h2+='<div class="hbar-row"><span class="hbar-lbl">Média Assistida</span><div class="hbar-track"><div class="hbar-fill" style="width:'+pA.toFixed(0)+'%;background:var(--teal)">'+mA.toFixed(1).replace('.',',')+' aulas ('+pA.toFixed(1)+'%)</div></div></div></div>';
-  }else{
-    h2+='<div class="d">Separado por produto</div><div class="hbar-area" style="height:auto;gap:20px">';
-    [['0 a 100k com a Rafa','base'],['Povo Academy','asc']].forEach(([nome,k])=>{
-      const tA=moda(a.totalAulas[k]);const mA=rd(avg(a.aulasComp[k]));const pA=tA>0?mA/tA*100:0;
-      h2+='<div style="font-size:13px;color:var(--a2);font-weight:600;margin-top:8px">'+nome+'</div>';
-      h2+='<div class="hbar-row"><span class="hbar-lbl">Total de Aulas</span><div class="hbar-track"><div class="hbar-fill" style="width:100%;background:var(--accent)">'+tA+' aulas</div></div></div>';
-      h2+='<div class="hbar-row"><span class="hbar-lbl">Média Assistida</span><div class="hbar-track"><div class="hbar-fill" style="width:'+Math.max(pA,2).toFixed(0)+'%;background:var(--teal)">'+mA.toFixed(1).replace('.',',')+' aulas ('+pA.toFixed(1)+'%)</div></div></div>';
-    });h2+='</div>';
-  }
+
+  // Progresso por Produto (bar chart)
+  const prodProgData=[['0 a 100k',rowsSemPovo.filter(r=>normProd(r[R.PRODUTO])==='base'),'var(--accent)'],['Black & Combo',rowsSemPovo.filter(r=>normProd(r[R.PRODUTO])==='black'),'var(--pink)']];
+  h2+='<div class="card" style="margin-top:24px"><h3>Progresso por Produto</h3><div class="d">Média de progresso sem Povo Academy</div><div class="hbar-area" style="height:auto;gap:20px">';
+  prodProgData.forEach(([nome,pRows,color])=>{const progs=pRows.filter(r=>r[R.PROG]!==null).map(r=>r[R.PROG]);const avgP=progs.length?rd(avg(progs)):0;h2+='<div class="hbar-row"><span class="hbar-lbl">'+nome+'</span><div class="hbar-track"><div class="hbar-fill" style="width:'+Math.max(avgP,2)+'%;background:'+color+'">'+fmtP(avgP)+'</div></div></div>';});
   h2+='</div></div>';
 
-  // Análise de Acesso — Tempo até o 1º Acesso
-  h2+='<div class="sec">👁️ Análise de Acesso</div>';
-  const activRows=rows.filter(r=>r[R.TIPO_ALUNO]==='BUYER'&&(r[R.STATUS_COMPRA]==='COMPLETE'||r[R.STATUS_COMPRA]==='APPROVED'));
-  const actBuyers=activRows.length;const actDiffs=[];let actNever=0;
-  activRows.forEach(r=>{if(!r[R.PRIM_ACESSO]||!r[R.ACESSOU]){actNever++;return;}if(!r[R.DT_COMPRA])return;const diff=Math.floor((r[R.PRIM_ACESSO]-r[R.DT_COMPRA])/86400000);if(diff<0)return;actDiffs.push(diff);});
-  const actValid=actDiffs.length;const actD0c=actDiffs.filter(d=>d===0).length;const actD1c=actDiffs.filter(d=>d===1).length;const actD2c=actDiffs.filter(d=>d>=2).length;
-  const actAvg=actValid>0?rd(actDiffs.reduce((s,d)=>s+d,0)/actValid):0;
-  const actPD0=actValid>0?rd(actD0c/actValid*100):0;const actPD1=actValid>0?rd(actD1c/actValid*100):0;const actPD2=actValid>0?rd(actD2c/actValid*100):0;
-  const actPUntilD1=actValid>0?rd((actD0c+actD1c)/actValid*100):0;
-  h2+='<div class="activ-grid"><div class="activ-hero">';
-  h2+='<div class="hero-stat"><div class="hero-big" style="color:var(--accent)">'+actAvg.toFixed(1).replace('.',',')+'<span style="font-size:20px;font-weight:400;color:var(--t2)"> dias</span></div><div class="hero-lbl">Tempo médio até o 1º acesso</div></div>';
-  h2+='<div class="hero-stat"><div class="hero-big" style="color:var(--teal)">'+actPD0.toFixed(1).replace('.',',')+'<span style="font-size:20px;font-weight:400;color:var(--t2)">%</span></div><div class="hero-lbl">Acessam no mesmo dia (D+0)</div></div>';
-  h2+='<div class="alert-box ok">✓ '+actPUntilD1.toFixed(1).replace('.',',')+'% dos alunos que vão acessar o fazem até o D+1</div>';
-  h2+='</div>';
-  h2+='<div class="activ-bars"><h3>Distribuição por dia de ativação</h3><div class="d">Apenas Buyers aprovados · '+actBuyers+' alunos</div>';
-  [['D+0',actPD0,actD0c,'accent'],['D+1',actPD1,actD1c,'teal'],['D+2+',actPD2,actD2c,'dim']].forEach(([lbl,pct,cnt,cls])=>{
-    h2+='<div class="ab-row"><span class="ab-lbl">'+lbl+'</span><div class="ab-track"><div class="ab-fill '+cls+'" style="width:'+Math.max(pct,1.5)+'%">'+(pct>15?'<span class="ab-pct">'+pct.toFixed(1)+'%</span>':'')+'</div></div>'+(pct<=15?'<span class="ab-pct-out">'+pct.toFixed(1)+'%</span>':'')+'<span class="ab-cnt">'+cnt+'</span></div>';
-  });h2+='</div></div>';
-
-  // Donuts acesso
-  h2+='<div class="g2" style="margin-top:24px">';
-  const degAc=Math.round(pctAcessou/100*360);
-  h2+='<div class="card"><h3>Acesso ao Curso</h3><div class="d">Acessaram vs nunca acessaram</div><div class="donut-area">'+donutHTML('var(--teal)',degAc,'var(--red)',fmtP(pctAcessou),'acessou','Acessou: '+a.acessou+' ('+fmtP(pctAcessou)+') · Nunca: '+a.nuncaAcessou+' ('+fmtP(pctNunca)+')','Acessou',a.acessou,'var(--teal)','Nunca',a.nuncaAcessou,'var(--red)')+'</div></div>';
-  const d60=a.faixaDias['>60d']||0;const d31=a.faixaDias['31-60d']||0;const d15=a.faixaDias['15-30d']||0;const d0=a.faixaDias['0-14d']||0;
-  const pD60=a.total>0?d60/a.total*100:0;const degD=Math.round((100-pD60)/100*360);
-  h2+='<div class="card"><h3>Dias sem Acesso</h3><div class="d">Distribuição por faixa de inatividade</div><div class="donut-area">'+donutHTML('var(--sky)',degD,'var(--red)',fmtP(pD60),'>60 dias','0-14d: '+d0+' · 15-30d: '+d15+' · 31-60d: '+d31+' · >60d: '+d60,'<60d',(a.total-d60),'var(--sky)','>60d',d60,'var(--red)')+'</div></div></div>';
+  // Acesso ao Curso donut
+  const degAc=Math.round(pctAcessouSP/100*360);
+  h2+='<div class="card" style="margin-top:24px"><h3>Acesso ao Curso</h3><div class="d">Acessaram vs nunca acessaram (sem Povo Academy)</div><div class="donut-area">'+donutHTML('var(--teal)',degAc,'var(--red)',fmtP(pctAcessouSP),'acessou','Acessou: '+aSP.acessou+' ('+fmtP(pctAcessouSP)+') · Nunca: '+aSP.nuncaAcessou+' ('+fmtP(pctNuncaSP)+')','Acessou',aSP.acessou,'var(--teal)','Nunca',aSP.nuncaAcessou,'var(--red)')+'</div></div>';
 
   // Insights Engajamento
   h2+='<div class="sec">💡 Insights — Engajamento</div><div class="ins-g">';
-  if(pD60>40)h2+='<div class="ins w"><div class="ins-t">⚠️ '+fmtP(pD60)+' inativos há +60 dias</div><div class="ins-p">'+d60+' dos '+a.total+' não acessam há mais de 60 dias.</div></div>';
-  const rec=a.funil['Recompra']||0;
-  if(rec>0)h2+='<div class="ins ok"><div class="ins-t">✅ Recompra: '+fmtP(a.total>0?rec/a.total*100:0)+'</div><div class="ins-p">'+rec+' alunos com progresso ≥70%.</div></div>';
-  if(avgProg<10)h2+='<div class="ins w"><div class="ins-t">🚨 Progresso baixo: '+fmtP(avgProg)+'</div><div class="ins-p">Ações de engajamento urgentes necessárias.</div></div>';
+  const rec=aSP.funil['Recompra']||0;
+  if(rec>0)h2+='<div class="ins ok"><div class="ins-t">✅ Recompra: '+fmtP(aSP.total>0?rec/aSP.total*100:0)+'</div><div class="ins-p">'+rec+' alunos na etapa de recompra.</div></div>';
+  if(avgProgSP<10)h2+='<div class="ins w"><div class="ins-t">🚨 Progresso baixo: '+fmtP(avgProgSP)+'</div><div class="ins-p">Ações de engajamento urgentes necessárias.</div></div>';
   h2+='</div>';
   document.getElementById('contentEngajamento').innerHTML=h2;
 
   // ========== TAB 3: FINANCEIRO & RECOMPRA ==========
   let h3='';
-  // Faturamento por produto
+  // Faturamento por produto (base + black + povo)
   if(!isSingleProd){
   const fatBase=rows.filter(r=>normProd(r[R.PRODUTO])==='base'&&r[R.VALOR]>0&&(r[R.STATUS_COMPRA]==='COMPLETE'||r[R.STATUS_COMPRA]==='APPROVED')).reduce((s,r)=>s+r[R.VALOR],0);
+  const fatBlack=rows.filter(r=>normProd(r[R.PRODUTO])==='black'&&r[R.VALOR]>0&&(r[R.STATUS_COMPRA]==='COMPLETE'||r[R.STATUS_COMPRA]==='APPROVED')).reduce((s,r)=>s+r[R.VALOR],0);
   const fatAsc=rows.filter(r=>normProd(r[R.PRODUTO])==='asc'&&r[R.VALOR]>0&&(r[R.STATUS_COMPRA]==='COMPLETE'||r[R.STATUS_COMPRA]==='APPROVED')).reduce((s,r)=>s+r[R.VALOR],0);
-  const fatTotal=fatBase+fatAsc;const degFat=fatTotal>0?Math.round(fatBase/fatTotal*360):0;
-  const pctFatBase=fatTotal>0?rd(fatBase/fatTotal*100):0;const pctFatAsc=fatTotal>0?rd(fatAsc/fatTotal*100):0;
+  const fatOutros=rows.filter(r=>{const np=normProd(r[R.PRODUTO]);return np!=='base'&&np!=='black'&&np!=='asc'&&r[R.VALOR]>0&&(r[R.STATUS_COMPRA]==='COMPLETE'||r[R.STATUS_COMPRA]==='APPROVED');}).reduce((s,r)=>s+r[R.VALOR],0);
+  const fatTotal=fatBase+fatBlack+fatAsc+fatOutros;
+  const fatProdArr=[['0 a 100k com a Rafa',fatBase,'var(--accent)'],['Black & Combo',fatBlack,'var(--pink)'],['Povo Academy',fatAsc,'var(--teal)']];
+  if(fatOutros>0)fatProdArr.push(['Outros',fatOutros,'var(--t3)']);
+  let conicFat='',degFat=0,legFat='';
+  fatProdArr.forEach((p,i)=>{const pc=fatTotal>0?p[1]/fatTotal*100:0;const dd=Math.round(pc/100*360);conicFat+=(i>0?',':'')+p[2]+' '+degFat+'deg '+(degFat+dd)+'deg';legFat+='<span><i style="background:'+p[2]+'"></i>'+p[0]+' ('+fmtR(p[1])+')</span>';degFat+=dd;});
+  if(!conicFat)conicFat='var(--t3) 0deg 360deg';
   h3+='<div class="sec">💎 Faturamento por Produto</div>';
-  h3+='<div class="g2"><div class="card"><h3>Representatividade de Faturamento</h3><div class="d">Receita por produto</div><div class="donut-area">'+donutHTML('var(--accent)',degFat,'var(--teal)',fmtRS(fatTotal),'total','0 a 100k: '+fmtR(fatBase)+' ('+fmtP(pctFatBase)+') · Povo Academy: '+fmtR(fatAsc)+' ('+fmtP(pctFatAsc)+')','0 a 100k com a Rafa',fmtR(fatBase),'var(--accent)','Povo Academy',fmtR(fatAsc),'var(--teal)')+'</div></div>';
-  h3+='<div class="card"><h3>Detalhamento por Produto</h3><div class="d">Comparativo de receita</div><div class="hbar-area" style="height:auto;gap:28px">';
-  const mxFat=Math.max(fatBase,fatAsc,1);
-  h3+='<div class="hbar-row"><span class="hbar-lbl">0 a 100k com a Rafa</span><div class="hbar-track"><div class="hbar-fill" style="width:'+Math.round(fatBase/mxFat*100)+'%;background:var(--accent)">'+fmtR(fatBase)+' ('+fmtP(pctFatBase)+')</div></div></div>';
-  h3+='<div class="hbar-row"><span class="hbar-lbl">Povo Academy</span><div class="hbar-track"><div class="hbar-fill" style="width:'+Math.round(fatAsc/mxFat*100)+'%;background:var(--teal)">'+fmtR(fatAsc)+' ('+fmtP(pctFatAsc)+')</div></div></div>';
+  h3+='<div class="g2"><div class="card"><h3>Representatividade de Faturamento</h3><div class="d">Receita por produto</div><div class="donut-area"><div class="donut-ring" style="background:conic-gradient('+conicFat+')"><span class="tt">'+fatProdArr.map(p=>p[0]+': '+fmtR(p[1])).join(' · ')+'</span><div style="width:120px;height:120px;background:var(--donut-hole);border-radius:50%;display:flex;align-items:center;justify-content:center"><div class="donut-center"><div class="donut-v" style="color:var(--accent)">'+fmtRS(fatTotal)+'</div><div class="donut-lbl">total</div></div></div></div><div class="donut-legend">'+legFat+'</div></div></div>';
+  h3+='<div class="card"><h3>Detalhamento por Produto</h3><div class="d">Comparativo de receita</div><div class="hbar-area" style="height:auto;gap:20px;overflow:visible">';
+  const mxFat=Math.max(...fatProdArr.map(p=>p[1]),1);
+  fatProdArr.forEach(([nome,val,color])=>{const pct=fatTotal>0?rd(val/fatTotal*100):0;h3+='<div class="hbar-row"><span class="hbar-lbl">'+nome+'</span><div class="hbar-track"><div class="hbar-fill" style="width:'+Math.max(Math.round(val/mxFat*100),2)+'%;background:'+color+';white-space:nowrap;overflow:visible;min-width:fit-content;padding-right:12px">'+fmtR(val)+' ('+fmtP(pct)+')</div></div></div>';});
   h3+='</div></div></div>';
   }
 
@@ -634,42 +604,40 @@ function renderAll(rows){
   h3+='<div class="g2" style="margin-top:24px"><div class="card"><h3>Compras vs Perdas</h3><div class="d">Comparativo financeiro</div><div class="chart"><div class="chart-bars"><div class="bar" style="height:95%;background:var(--green);flex:2"><span class="tt">Vendas: '+fmtR(f.compras_v)+'</span></div><div class="bar" style="height:'+Math.round(perda/mxFin*95)+'%;background:var(--red);flex:1"><span class="tt">Perdas: '+fmtR(perda)+'</span></div></div><div class="chart-labels"><div class="chart-lbl" style="flex:2">Vendas ('+fmtR(f.compras_v)+')</div><div class="chart-lbl" style="flex:1">Perdas ('+fmtR(perda)+')</div></div></div></div>';
   h3+='<div class="card"><h3>Status Transações</h3><div class="d">Distribuição</div><div class="hbar-area"><div class="hbar-row"><span class="hbar-lbl">Aprovadas</span><div class="hbar-track"><div class="hbar-fill" style="width:'+(ttx>0?Math.round(f.compras_n/ttx*100):0)+'%;background:var(--green)">'+f.compras_n+'</div></div></div><div class="hbar-row"><span class="hbar-lbl">Reembolsos</span><div class="hbar-track"><div class="hbar-fill" style="width:'+(ttx>0?Math.max(Math.round(f.reembolso_n/ttx*100),2):0)+'%;background:var(--red)">'+f.reembolso_n+'</div></div></div></div></div></div>';
 
-  // Reembolso tendência
-  const recV=f.compras_v||1;
+  // Reembolso tendência — vendas do período + % reembolso sobre receita do período
   h3+='<div class="sec">📉 Reembolso — Tendência</div><div class="g3">';
-  [[a.reemb30,'30 dias','var(--green)'],[a.reemb60,'60 dias','var(--gold)'],[a.reemb90,'90 dias','var(--red)']].forEach(([rb,label,color])=>{
-    const pct=rd(recV>0?rb.v/recV*100:0);
-    h3+='<div class="trend-card" style="border-top:4px solid '+color+'"><div style="font-size:14px;font-weight:600;color:var(--t2)">Últimos '+label+'</div><div style="font-size:13px;color:var(--t3)">reembolsos no período</div><div class="trend-val" style="color:'+color+'">'+rb.n+'</div><div class="trend-money" style="color:'+color+'">'+fmtR(rb.v)+'</div><span class="trend-pct" style="background:'+color+'22;color:'+color+'">'+fmtP(pct)+' da receita</span></div>';
+  [[a.reemb30,a.vendas30,'30 dias','var(--green)'],[a.reemb60,a.vendas60,'60 dias','var(--gold)'],[a.reemb90,a.vendas90,'90 dias','var(--red)']].forEach(([rb,vd,label,color])=>{
+    const receitaPeriodo=vd.v||0;const pctReembPeriodo=receitaPeriodo>0?rd(rb.v/receitaPeriodo*100):0;
+    h3+='<div class="trend-card" style="border-top:4px solid '+color+'"><div style="font-size:14px;font-weight:600;color:var(--t2)">Últimos '+label+'</div><div style="font-size:13px;color:var(--t3)">vendas: '+fmtR(receitaPeriodo)+' ('+vd.n+' compras)</div><div class="trend-val" style="color:'+color+'">'+rb.n+' reembolsos</div><div class="trend-money" style="color:'+color+'">'+fmtR(rb.v)+'</div><span class="trend-pct" style="background:'+color+'22;color:'+color+'">'+fmtP(pctReembPeriodo)+' da receita do período</span></div>';
   });h3+='</div>';
 
-  // Cross-sell (ALWAYS visible)
-  const allBase=new Set(),allAsc=new Set(),progAll2={},acessosAll2={},dtAprovAll2={};
+  // Cross-sell: Base + Black → Povo Academy (usando DT_APROV)
+  const allCrossBase=new Set(),allCrossAsc=new Set(),progCross={},dtAprovCross={};
   RAW_DATA.forEach(r=>{
-    if(r[R.EMAIL]){
+    if(r[R.EMAIL]&&(r[R.STATUS_COMPRA]==='COMPLETE'||r[R.STATUS_COMPRA]==='APPROVED')){
       const prodNorm=normProd(r[R.PRODUTO]);
-      if(prodNorm==='base'){allBase.add(r[R.EMAIL]);if(!dtAprovAll2[r[R.EMAIL]])dtAprovAll2[r[R.EMAIL]]={};if(r[R.DT_COMPRA])dtAprovAll2[r[R.EMAIL]]['base']=r[R.DT_COMPRA];}
-      if(prodNorm==='asc'){allAsc.add(r[R.EMAIL]);if(!dtAprovAll2[r[R.EMAIL]])dtAprovAll2[r[R.EMAIL]]={};if(r[R.DT_COMPRA])dtAprovAll2[r[R.EMAIL]]['asc']=r[R.DT_COMPRA];}
-      if(r[R.PROG]!==null){if(!progAll2[r[R.EMAIL]])progAll2[r[R.EMAIL]]={};const prev=progAll2[r[R.EMAIL]][r[R.PRODUTO]];if(prev===undefined||r[R.PROG]>prev)progAll2[r[R.EMAIL]][r[R.PRODUTO]]=r[R.PROG];}
-      if(r[R.QTD_ACESSOS]!==null&&r[R.QTD_ACESSOS]>=0){if(!acessosAll2[r[R.EMAIL]])acessosAll2[r[R.EMAIL]]={};acessosAll2[r[R.EMAIL]][r[R.PRODUTO]]=r[R.QTD_ACESSOS];}
+      if(prodNorm==='base'||prodNorm==='black'){allCrossBase.add(r[R.EMAIL]);if(!dtAprovCross[r[R.EMAIL]])dtAprovCross[r[R.EMAIL]]={};if(r[R.DT_APROV]){const prev=dtAprovCross[r[R.EMAIL]]['base'];if(!prev||r[R.DT_APROV]<prev)dtAprovCross[r[R.EMAIL]]['base']=r[R.DT_APROV];}}
+      if(prodNorm==='asc'){allCrossAsc.add(r[R.EMAIL]);if(!dtAprovCross[r[R.EMAIL]])dtAprovCross[r[R.EMAIL]]={};if(r[R.DT_APROV]){const prev=dtAprovCross[r[R.EMAIL]]['asc'];if(!prev||r[R.DT_APROV]<prev)dtAprovCross[r[R.EMAIL]]['asc']=r[R.DT_APROV];}}
+      if(r[R.PROG]!==null&&(prodNorm==='base'||prodNorm==='black')){if(!progCross[r[R.EMAIL]]||r[R.PROG]>progCross[r[R.EMAIL]])progCross[r[R.EMAIL]]=r[R.PROG];}
     }
   });
-  let crossN=0;const crossProgs2=[],crossAcessos2=[],crossDays2=[];
-  allAsc.forEach(e=>{if(allBase.has(e)){crossN++;if(progAll2[e]){for(let prod in progAll2[e]){if(normProd(prod)==='base'&&progAll2[e][prod]!==undefined){crossProgs2.push(progAll2[e][prod]);break;}}}if(acessosAll2[e]){for(let prod in acessosAll2[e]){if(normProd(prod)==='base'&&acessosAll2[e][prod]!==undefined){crossAcessos2.push(acessosAll2[e][prod]);break;}}}if(dtAprovAll2[e]&&dtAprovAll2[e]['base']&&dtAprovAll2[e]['asc']){const diff=Math.floor((dtAprovAll2[e]['asc']-dtAprovAll2[e]['base'])/86400000);if(diff>=0)crossDays2.push(diff);}}});
-  const baseT=allBase.size,ascT=allAsc.size;const avgCross2=crossProgs2.length?rd(avg(crossProgs2)):0;const avgCrossAc2=crossAcessos2.length?rd(avg(crossAcessos2)):0;
-  const potencial=baseT-crossN;const pctPot=baseT>0?rd(potencial/baseT*100):0;
-  let medDays=0;if(crossDays2.length){const sorted=[...crossDays2].sort((a,b)=>a-b);const mid=Math.floor(sorted.length/2);medDays=sorted.length%2?sorted[mid]:Math.round((sorted[mid-1]+sorted[mid])/2);}
-  const w60=crossDays2.filter(d=>d<=60).length;const pW60=crossDays2.length>0?rd(w60/crossDays2.length*100):0;
+  let crossN=0;const crossProgs=[],crossDays=[];
+  allCrossAsc.forEach(e=>{if(allCrossBase.has(e)){crossN++;if(progCross[e]!==undefined)crossProgs.push(progCross[e]);if(dtAprovCross[e]&&dtAprovCross[e]['base']&&dtAprovCross[e]['asc']){const diff=Math.floor((dtAprovCross[e]['asc']-dtAprovCross[e]['base'])/86400000);if(diff>=0)crossDays.push(diff);}}});
+  const crossBaseT=allCrossBase.size,crossAscT=allCrossAsc.size;
+  const avgCrossP=crossProgs.length?rd(avg(crossProgs)):0;
+  const potencial=crossBaseT-crossN;const pctPot=crossBaseT>0?rd(potencial/crossBaseT*100):0;
+  let medDays=0;if(crossDays.length){const sorted=[...crossDays].sort((a,b)=>a-b);const mid=Math.floor(sorted.length/2);medDays=sorted.length%2?sorted[mid]:Math.round((sorted[mid-1]+sorted[mid])/2);}
+  const w60=crossDays.filter(d=>d<=60).length;const pW60=crossDays.length>0?rd(w60/crossDays.length*100):0;
 
   h3+='<div class="sec">🔄 Oportunidade entre Produtos</div><div class="g2">';
-  h3+='<div class="rc"><h3>Cross-sell 0 a 100k → Povo Academy <span class="rc-badge conv">Conversão</span></h3>';
-  h3+='<div class="rc-row"><span class="rc-l">Alunos 0 a 100k que compraram Povo Academy</span><span class="rc-v" style="color:var(--teal)">'+crossN+'</span></div>';
-  h3+='<div class="rc-row"><span class="rc-l">% de cross-sell</span><span class="rc-v" style="color:var(--teal)">'+fmtP(baseT>0?rd(crossN/baseT*100):0)+'</span></div>';
+  h3+='<div class="rc"><h3>Cross-sell Base + Black → Povo Academy <span class="rc-badge conv">Conversão</span></h3>';
+  h3+='<div class="rc-row"><span class="rc-l">Alunos (0 a 100k + Black) que compraram Povo Academy</span><span class="rc-v" style="color:var(--teal)">'+crossN+'</span></div>';
+  h3+='<div class="rc-row"><span class="rc-l">% de cross-sell</span><span class="rc-v" style="color:var(--teal)">'+fmtP(crossBaseT>0?rd(crossN/crossBaseT*100):0)+'</span></div>';
   h3+='<div class="rc-potencial"><span class="rc-l">Potencial restante</span><span class="rc-v" style="color:var(--gold)">'+fmtN(potencial)+' <small style="font-size:12px;font-weight:400;color:var(--t2)">('+fmtP(pctPot)+')</small></span></div></div>';
   h3+='<div class="rc" style="background:linear-gradient(135deg,var(--card) 0%,rgba(45,212,191,.04) 100%);border-color:rgba(45,212,191,.15)"><h3 style="color:var(--teal)">Quem compra o Povo Academy <span class="rc-badge perf">Perfil</span></h3>';
-  h3+='<div class="rc-row"><span class="rc-l">Progresso médio no 0 a 100k</span><span class="rc-v" style="color:var(--teal)">'+fmtP(avgCross2)+'</span></div>';
-  h3+='<div class="rc-row"><span class="rc-l">Média de acessos no 0 a 100k</span><span class="rc-v" style="color:var(--teal)">'+avgCrossAc2.toFixed(1).replace('.',',')+'</span></div>';
+  h3+='<div class="rc-row"><span class="rc-l">Progresso médio no produto base</span><span class="rc-v" style="color:var(--teal)">'+fmtP(avgCrossP)+'</span></div>';
   h3+='<div class="rc-row"><span class="rc-l">Tempo médio até o cross-sell</span><span class="rc-v" style="color:var(--gold)">'+medDays+' <small style="font-size:12px;font-weight:400;color:var(--t2)">dias (mediana)</small></span></div>';
-  h3+='<div class="rc-row"><span class="rc-l">Compraram Povo Academy vindos do 0 a 100k</span><span class="rc-v" style="color:var(--green)">'+fmtP(ascT>0?rd(crossN/ascT*100):0)+'</span></div>';
+  h3+='<div class="rc-row"><span class="rc-l">Compraram Povo Academy vindos da base</span><span class="rc-v" style="color:var(--green)">'+fmtP(crossAscT>0?rd(crossN/crossAscT*100):0)+'</span></div>';
   if(pW60>0)h3+='<div class="rc-alert">⚡ '+fmtP(pW60)+' compram nos primeiros 60 dias — janela ideal de abordagem</div>';
   h3+='</div></div>';
 
@@ -678,7 +646,7 @@ function renderAll(rows){
   if(a.reemb30.n===0)h3+='<div class="ins ok"><div class="ins-t">✅ 0 reembolsos nos últimos 30 dias</div><div class="ins-p">Tendência estável.</div></div>';
   else h3+='<div class="ins w"><div class="ins-t">⚠️ '+a.reemb30.n+' reembolso(s) nos últimos 30 dias</div><div class="ins-p">'+fmtR(a.reemb30.v)+' de impacto recente.</div></div>';
   if(pctReemb>15)h3+='<div class="ins w"><div class="ins-t">🚨 Reembolso: '+fmtP(pctReemb)+'</div><div class="ins-p">'+f.reembolso_n+' reembolsos · '+fmtR(f.reembolso_v)+' de impacto.</div></div>';
-  if(pctPot>50)h3+='<div class="ins i"><div class="ins-t">⚡ '+fmtP(pctPot)+' da base 0 a 100k ainda não comprou Povo Academy</div><div class="ins-p">'+fmtN(potencial)+' alunos potenciais para cross-sell.</div></div>';
+  if(pctPot>50)h3+='<div class="ins i"><div class="ins-t">⚡ '+fmtP(pctPot)+' da base ainda não comprou Povo Academy</div><div class="ins-p">'+fmtN(potencial)+' alunos potenciais para cross-sell.</div></div>';
   h3+='</div>';
   document.getElementById('contentFinanceiro').innerHTML=h3;
 }
