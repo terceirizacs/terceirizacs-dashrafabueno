@@ -611,9 +611,10 @@ function renderAll(rows){
     h3+='<div class="trend-card" style="border-top:4px solid '+color+'"><div style="font-size:14px;font-weight:600;color:var(--t2)">Últimos '+label+'</div><div style="font-size:13px;color:var(--t3)">vendas: '+fmtR(receitaPeriodo)+' ('+vd.n+' compras)</div><div class="trend-val" style="color:'+color+'">'+rb.n+' reembolsos</div><div class="trend-money" style="color:'+color+'">'+fmtR(rb.v)+'</div><span class="trend-pct" style="background:'+color+'22;color:'+color+'">'+fmtP(pctReembPeriodo)+' da receita do período</span></div>';
   });h3+='</div>';
 
-  // Cross-sell por produto → Povo Academy (usando DT_APROV do RAW_DATA)
-  function calcCrossSell(sourceType){
-    const srcEmails=new Set(),ascEmails=new Set(),srcProg={},srcDt={},ascDt={};
+  // Cross-sell por produto (usando DT_APROV do RAW_DATA)
+  function calcCrossSell(sourceType,destType){
+    destType=destType||'asc';
+    const srcEmails=new Set(),destEmails=new Set(),srcProg={},srcDt={},destDt={};
     RAW_DATA.forEach(r=>{
       if(!r[R.EMAIL]||!(r[R.STATUS_COMPRA]==='COMPLETE'||r[R.STATUS_COMPRA]==='APPROVED'))return;
       const np=normProd(r[R.PRODUTO]);
@@ -622,14 +623,14 @@ function renderAll(rows){
         if(r[R.DT_APROV]){if(!srcDt[r[R.EMAIL]]||r[R.DT_APROV]<srcDt[r[R.EMAIL]])srcDt[r[R.EMAIL]]=r[R.DT_APROV];}
         if(r[R.PROG]!==null){if(!srcProg[r[R.EMAIL]]||r[R.PROG]>srcProg[r[R.EMAIL]])srcProg[r[R.EMAIL]]=r[R.PROG];}
       }
-      if(np==='asc'){
-        ascEmails.add(r[R.EMAIL]);
-        if(r[R.DT_APROV]){if(!ascDt[r[R.EMAIL]]||r[R.DT_APROV]<ascDt[r[R.EMAIL]])ascDt[r[R.EMAIL]]=r[R.DT_APROV];}
+      if(np===destType){
+        destEmails.add(r[R.EMAIL]);
+        if(r[R.DT_APROV]){if(!destDt[r[R.EMAIL]]||r[R.DT_APROV]<destDt[r[R.EMAIL]])destDt[r[R.EMAIL]]=r[R.DT_APROV];}
       }
     });
     let n=0;const progs=[],days=[];
-    ascEmails.forEach(e=>{if(srcEmails.has(e)){n++;if(srcProg[e]!==undefined)progs.push(srcProg[e]);if(srcDt[e]&&ascDt[e]){const diff=Math.floor((ascDt[e]-srcDt[e])/86400000);if(diff>=0)days.push(diff);}}});
-    const srcT=srcEmails.size,ascT=ascEmails.size;
+    destEmails.forEach(e=>{if(srcEmails.has(e)){n++;if(srcProg[e]!==undefined)progs.push(srcProg[e]);if(srcDt[e]&&destDt[e]){const diff=Math.floor((destDt[e]-srcDt[e])/86400000);if(diff>=0)days.push(diff);}}});
+    const srcT=srcEmails.size,ascT=destEmails.size;
     const avgP=progs.length?rd(avg(progs)):0;
     const pot=srcT-n;const pctP=srcT>0?rd(pot/srcT*100):0;
     let med=0;if(days.length){const s=[...days].sort((a,b)=>a-b);const m=Math.floor(s.length/2);med=s.length%2?s[m]:Math.round((s[m-1]+s[m])/2);}
@@ -637,8 +638,10 @@ function renderAll(rows){
     return{n,srcT,ascT,avgP,pot,pctP,med,pw};
   }
 
-  const cs100k=calcCrossSell('base');
-  const csBlack=calcCrossSell('black');
+  const cs100k=calcCrossSell('base','asc');
+  const csBlack=calcCrossSell('black','asc');
+  const cs100kMent=calcCrossSell('base','mentoria');
+  const csBlackMent=calcCrossSell('black','mentoria');
 
   h3+='<div class="sec">🔄 Oportunidade entre Produtos</div>';
 
@@ -666,6 +669,30 @@ function renderAll(rows){
   h3+='<div class="rc-row"><span class="rc-l">Tempo médio até o cross-sell</span><span class="rc-v" style="color:var(--gold)">'+csBlack.med+' <small style="font-size:12px;font-weight:400;color:var(--t2)">dias (mediana)</small></span></div>';
   h3+='<div class="rc-row"><span class="rc-l">Compraram Povo vindos do Black</span><span class="rc-v" style="color:var(--green)">'+fmtP(csBlack.ascT>0?rd(csBlack.n/csBlack.ascT*100):0)+'</span></div>';
   if(csBlack.pw>0)h3+='<div class="rc-alert">⚡ '+fmtP(csBlack.pw)+' compram nos primeiros 60 dias</div>';
+  h3+='</div></div>';
+
+  // Seção 3: 0 a 100k → Mentoria Análise de Conta
+  h3+='<div class="g2" style="margin-top:24px">';
+  h3+='<div class="rc" style="border-color:rgba(251,191,36,.15)"><h3>0 a 100k → Mentoria Análise de Conta <span class="rc-badge conv" style="background:rgba(251,191,36,.12);color:var(--gold)">Conversão</span></h3>';
+  h3+='<div class="rc-row"><span class="rc-l">Alunos 0 a 100k que compraram Mentoria</span><span class="rc-v" style="color:var(--gold)">'+cs100kMent.n+'</span></div>';
+  h3+='<div class="rc-row"><span class="rc-l">% de cross-sell</span><span class="rc-v" style="color:var(--gold)">'+fmtP(cs100kMent.srcT>0?rd(cs100kMent.n/cs100kMent.srcT*100):0)+'</span></div>';
+  h3+='<div class="rc-potencial"><span class="rc-l">Potencial restante</span><span class="rc-v" style="color:var(--gold)">'+fmtN(cs100kMent.pot)+' <small style="font-size:12px;font-weight:400;color:var(--t2)">('+fmtP(cs100kMent.pctP)+')</small></span></div></div>';
+  h3+='<div class="rc" style="background:linear-gradient(135deg,var(--card) 0%,rgba(251,191,36,.04) 100%);border-color:rgba(251,191,36,.15)"><h3 style="color:var(--gold)">Perfil de quem ascende <span class="rc-badge perf" style="background:rgba(251,191,36,.12);color:var(--gold)">0 a 100k → Mentoria</span></h3>';
+  h3+='<div class="rc-row"><span class="rc-l">Progresso médio no 0 a 100k</span><span class="rc-v" style="color:var(--gold)">'+fmtP(cs100kMent.avgP)+'</span></div>';
+  h3+='<div class="rc-row"><span class="rc-l">Tempo médio até o cross-sell</span><span class="rc-v" style="color:var(--gold)">'+cs100kMent.med+' <small style="font-size:12px;font-weight:400;color:var(--t2)">dias (mediana)</small></span></div>';
+  if(cs100kMent.pw>0)h3+='<div class="rc-alert">⚡ '+fmtP(cs100kMent.pw)+' compram nos primeiros 60 dias</div>';
+  h3+='</div></div>';
+
+  // Seção 4: Black & Combo → Mentoria Análise de Conta
+  h3+='<div class="g2" style="margin-top:24px">';
+  h3+='<div class="rc" style="border-color:rgba(251,146,60,.15)"><h3>Black & Combo → Mentoria Análise de Conta <span class="rc-badge conv" style="background:rgba(251,146,60,.12);color:var(--orange)">Conversão</span></h3>';
+  h3+='<div class="rc-row"><span class="rc-l">Alunos Black que compraram Mentoria</span><span class="rc-v" style="color:var(--orange)">'+csBlackMent.n+'</span></div>';
+  h3+='<div class="rc-row"><span class="rc-l">% de cross-sell</span><span class="rc-v" style="color:var(--orange)">'+fmtP(csBlackMent.srcT>0?rd(csBlackMent.n/csBlackMent.srcT*100):0)+'</span></div>';
+  h3+='<div class="rc-potencial"><span class="rc-l">Potencial restante</span><span class="rc-v" style="color:var(--gold)">'+fmtN(csBlackMent.pot)+' <small style="font-size:12px;font-weight:400;color:var(--t2)">('+fmtP(csBlackMent.pctP)+')</small></span></div></div>';
+  h3+='<div class="rc" style="background:linear-gradient(135deg,var(--card) 0%,rgba(251,146,60,.04) 100%);border-color:rgba(251,146,60,.15)"><h3 style="color:var(--orange)">Perfil de quem ascende <span class="rc-badge perf" style="background:rgba(251,146,60,.12);color:var(--orange)">Black → Mentoria</span></h3>';
+  h3+='<div class="rc-row"><span class="rc-l">Progresso médio no Black</span><span class="rc-v" style="color:var(--orange)">'+fmtP(csBlackMent.avgP)+'</span></div>';
+  h3+='<div class="rc-row"><span class="rc-l">Tempo médio até o cross-sell</span><span class="rc-v" style="color:var(--orange)">'+csBlackMent.med+' <small style="font-size:12px;font-weight:400;color:var(--t2)">dias (mediana)</small></span></div>';
+  if(csBlackMent.pw>0)h3+='<div class="rc-alert">⚡ '+fmtP(csBlackMent.pw)+' compram nos primeiros 60 dias</div>';
   h3+='</div></div>';
 
   const potTotal=cs100k.pot+csBlack.pot;const pctPot=potTotal>0?rd(potTotal/(cs100k.srcT+csBlack.srcT)*100):0;
