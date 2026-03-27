@@ -338,9 +338,9 @@ const fmtN=n=>n.toLocaleString('pt-BR');
 const fmtR=n=>'R$ '+Math.round(n).toLocaleString('pt-BR');
 const fmtRS=n=>{if(n>=1000000)return'R$ '+(n/1000000).toFixed(1).replace('.',',')+' M';return fmtR(n);};
 const fmtP=n=>n.toFixed(1).replace('.',',')+' %';
-const funilOrder=['Nunca acessou','Onboarding','Desengajado','Recompra'];
-const funilColors=['var(--pink)','var(--orange)','var(--red)','var(--green)'];
-const funilBg=['rgba(244,114,182,.12)','rgba(251,146,60,.12)','rgba(248,113,113,.12)','rgba(52,211,153,.12)'];
+const funilOrder=['Nunca acessou','Onboarding','Consumiu pouco','Desengajado','Engajado','Recompra'];
+const funilColors=['var(--pink)','var(--orange)','var(--gold)','var(--red)','var(--sky)','var(--green)'];
+const funilBg=['rgba(244,114,182,.12)','rgba(251,146,60,.12)','rgba(251,191,36,.12)','rgba(248,113,113,.12)','rgba(56,189,248,.12)','rgba(52,211,153,.12)'];
 const progOrder=['0','1-10','11-20','21-30','31-40','41-50','51-60','61-70','71-80','81-90','91-100'];
 const progColors=['var(--red)','var(--pink)','var(--orange)','var(--gold)','var(--sky)','var(--cyan)','var(--teal)','var(--green)','var(--accent)','var(--a2)','var(--sky)'];
 const tipoColors={'BUYER':'var(--green)','IMPORTED':'var(--accent)','GUEST':'var(--gold)','FREE':'var(--sky)'};
@@ -530,6 +530,7 @@ function renderAll(rows){
   const outrosC=a.total-baseC-blackC-ascC;
   const prodData=[['0 a 100k com a Rafa',baseC,'var(--accent)'],['Black & Combo',blackC,'var(--pink)'],['Povo Academy',ascC,'var(--teal)']];
   if(outrosC>0)prodData.push(['Outros',outrosC,'var(--t3)']);
+  prodData.sort((a,b)=>b[1]-a[1]);
   const prodTotal=prodData.reduce((s,p)=>s+p[1],0);
   let conicProd='',degProd=0,legProd='';
   prodData.forEach((p,i)=>{const pc=prodTotal>0?p[1]/prodTotal*100:0;const dd=Math.round(pc/100*360);conicProd+=(i>0?',':'')+p[2]+' '+degProd+'deg '+(degProd+dd)+'deg';legProd+='<span><i style="background:'+p[2]+'"></i>'+p[0]+' ('+fmtN(p[1])+')</span>';degProd+=dd;});
@@ -582,6 +583,7 @@ function renderAll(rows){
   const fatTotal=fatBase+fatBlack+fatAsc+fatOutros;
   const fatProdArr=[['0 a 100k com a Rafa',fatBase,'var(--accent)'],['Black & Combo',fatBlack,'var(--pink)'],['Povo Academy',fatAsc,'var(--teal)']];
   if(fatOutros>0)fatProdArr.push(['Outros',fatOutros,'var(--t3)']);
+  fatProdArr.sort((a,b)=>b[1]-a[1]);
   let conicFat='',degFat=0,legFat='';
   fatProdArr.forEach((p,i)=>{const pc=fatTotal>0?p[1]/fatTotal*100:0;const dd=Math.round(pc/100*360);conicFat+=(i>0?',':'')+p[2]+' '+degFat+'deg '+(degFat+dd)+'deg';legFat+='<span><i style="background:'+p[2]+'"></i>'+p[0]+' ('+fmtR(p[1])+')</span>';degFat+=dd;});
   if(!conicFat)conicFat='var(--t3) 0deg 360deg';
