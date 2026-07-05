@@ -492,7 +492,7 @@ function inatCardHbar(rows, idxUlt, agora){
   rows.forEach(function(r){var u=r[idxUlt]; if(!u){cN++;return;} var d=Math.floor((agora-u)/86400000); if(d<0)d=0; if(d<=14)c0++; else if(d<=30)c15++; else if(d<=60)c31++; else c60++;});
   var it=[['0-14 dias',c0,'var(--green)'],['15-30 dias',c15,'var(--gold)'],['31-60 dias',c31,'var(--orange)'],['>60 dias',c60,'var(--red)'],['Nunca acessou',cN,'var(--pink)']];
   var t=it.reduce(function(s,x){return s+x[1];},0);var mx=Math.max.apply(null,it.map(function(x){return x[1];}).concat([1]));var h='';
-  it.forEach(function(x){var w=Math.max(Math.round(x[1]/mx*100),3);var p=t?(x[1]/t*100):0;h+='<div class="hbar-row"><span class="hbar-lbl">'+x[0]+'</span><div class="hbar-track"><div class="hbar-fill" style="width:'+w+'%;background:'+x[2]+'">'+fmtN(x[1])+'</div></div><span style="font-family:JetBrains Mono;font-weight:700;font-size:14px;color:var(--t3);min-width:56px;text-align:right">'+p.toFixed(1).replace(".",",")+" %"+'</span></div>';});
+  it.forEach(function(x){var w=Math.max(Math.round(x[1]/mx*100),3);var p=t?(x[1]/t*100):0;h+='<div class="hbar-row"><span class="hbar-lbl">'+x[0]+'</span><div class="hbar-track"><div class="hbar-fill" style="width:'+w+'%;background:'+x[2]+';overflow:visible">'+fmtN(x[1])+'</div></div><span style="font-family:JetBrains Mono;font-weight:700;font-size:14px;color:var(--t3);min-width:56px;text-align:right">'+p.toFixed(1).replace(".",",")+" %"+'</span></div>';});
   return '<div class="sec">👁️ Acesso à Plataforma</div><div class="card"><h3>Inatividade</h3><div class="d">Dias desde o último acesso (sem Povo Academy)</div><div class="hbar-area" style="height:auto">'+h+'</div></div>';
 }
 
