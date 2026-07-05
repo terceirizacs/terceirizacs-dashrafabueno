@@ -482,6 +482,20 @@ function moda(arr){if(!arr.length)return 0;const c={};arr.forEach(v=>c[v]=(c[v]|
 function donutHTML(c1,deg,c2,cVal,cLbl,tt,l1,n1,lc1,l2,n2,lc2){return'<div class="donut-ring" style="background:conic-gradient('+c1+' 0deg '+deg+'deg,'+c2+' '+deg+'deg 360deg)"><span class="tt">'+tt+'</span><div style="width:120px;height:120px;background:var(--donut-hole);border-radius:50%;display:flex;align-items:center;justify-content:center"><div class="donut-center"><div class="donut-v" style="color:'+c1+'">'+cVal+'</div><div class="donut-lbl">'+cLbl+'</div></div></div></div><div class="donut-legend"><span><i style="background:'+lc1+'"></i>'+l1+' ('+n1+')</span><span><i style="background:'+lc2+'"></i>'+l2+' ('+n2+')</span></div>';}
 function kpiCard(bg,label,value,sub,color){return'<div class="kpi"><div class="kpi-bar" style="background:'+bg+'"></div><div class="kpi-l">'+label+'</div><div class="kpi-v" style="color:'+color+'">'+value+'</div>'+(sub?'<div class="kpi-s">'+sub+'</div>':'')+'</div>';}
 
+function helpQ(def){return '<span onmouseenter="hqShow(event,'+def+')" onmousemove="hqShow(event,'+def+')" onmouseleave="hqHide()" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;border:1px solid var(--t3);color:var(--t3);font-size:11px;font-weight:700;cursor:help;margin-left:8px;vertical-align:middle">?</span>';}
+var _HQT;function hqTip(){if(!_HQT){_HQT=document.createElement('div');_HQT.style.cssText='position:fixed;z-index:9999;pointer-events:none;background:rgba(15,15,15,.96);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px 14px;max-width:300px;font-size:12px;opacity:0;transition:opacity .15s;box-shadow:0 12px 40px rgba(0,0,0,.5)';document.body.appendChild(_HQT);}return _HQT;}
+function hqShow(e,html){var t=hqTip();t.innerHTML=html;t.style.opacity='1';t.style.left=Math.min(e.clientX+14,window.innerWidth-320)+'px';t.style.top=Math.max(e.clientY-60,8)+'px';}
+function hqHide(){if(_HQT)_HQT.style.opacity='0';}
+var FUNIL_DEF='<div style="font-weight:700;margin-bottom:6px">Como lemos o funil</div><div style="font-size:11px;line-height:1.8;text-align:left"><b style=color:#f472b6>Nunca acessou</b>: comprou mas nunca fez login.<br><b style=color:#fb923c>Onboarding</b>: começou agora / logou mas ainda com progresso muito baixo.<br><b style=color:#fbbf24>Consumiu pouco</b>: progresso abaixo de 10% e +30 dias sem acessar.<br><b style=color:#f87171>Desengajado</b>: progresso de 10% a 40% e +30 dias sem acessar.<br><b style=color:#38bdf8>Engajado</b>: acessou nos últimos 30 dias (progresso até 40%).<br><b style=color:#34d399>Recompra</b>: progresso de 40% ou mais (perfil que costuma renovar).</div>';
+function inatCardHbar(rows, idxUlt, agora){
+  var c0=0,c15=0,c31=0,c60=0,cN=0;
+  rows.forEach(function(r){var u=r[idxUlt]; if(!u){cN++;return;} var d=Math.floor((agora-u)/86400000); if(d<0)d=0; if(d<=14)c0++; else if(d<=30)c15++; else if(d<=60)c31++; else c60++;});
+  var it=[['0-14 dias',c0,'var(--green)'],['15-30 dias',c15,'var(--gold)'],['31-60 dias',c31,'var(--orange)'],['>60 dias',c60,'var(--red)'],['Nunca acessou',cN,'var(--pink)']];
+  var t=it.reduce(function(s,x){return s+x[1];},0);var mx=Math.max.apply(null,it.map(function(x){return x[1];}).concat([1]));var h='';
+  it.forEach(function(x){var w=Math.max(Math.round(x[1]/mx*100),3);var p=t?(x[1]/t*100):0;h+='<div class="hbar-row"><span class="hbar-lbl">'+x[0]+'</span><div class="hbar-track"><div class="hbar-fill" style="width:'+w+'%;background:'+x[2]+'">'+fmtN(x[1])+'</div></div><span style="font-family:JetBrains Mono;font-weight:700;font-size:14px;color:var(--t3);min-width:56px;text-align:right">'+p.toFixed(1).replace(".",",")+" %"+'</span></div>';});
+  return '<div class="sec">👁️ Acesso à Plataforma</div><div class="card"><h3>Inatividade</h3><div class="d">Dias desde o último acesso (sem Povo Academy)</div><div class="hbar-area" style="height:auto">'+h+'</div></div>';
+}
+
 function renderAll(rows){
   const a=aggregate(rows);const f=a.fin;
   const perda=f.reembolso_v+f.chargeback_v+f.cancelado_v;
@@ -512,7 +526,7 @@ function renderAll(rows){
   h1+='</div>';
 
   // Jornada do Aluno (Funil) — sem Povo Academy
-  h1+='<div class="sec">📊 Jornada do Aluno</div>';
+  h1+='<div class="sec">📊 Jornada do Aluno'+helpQ('FUNIL_DEF')+'</div>';
   const fd=funilOrder.map(f=>aSP.funil[f]||0);const mxF=Math.max(...fd,1);
   h1+='<div class="g2"><div class="card"><h3>Distribuição da Jornada</h3><div class="d">Classificação por progresso e acesso (sem Povo Academy)</div><div class="chart"><div class="chart-bars">';
   funilOrder.forEach((f,i)=>{const q=fd[i];const hh=Math.round(q/mxF*90);const pc=aSP.total>0?q/aSP.total*100:0;h1+='<div class="bar" style="height:'+hh+'%;background:'+funilColors[i]+'"><span style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:11px;font-family:JetBrains Mono;font-weight:600;color:var(--t1);white-space:nowrap">'+pc.toFixed(1)+'%</span><span class="tt">'+f+': '+q+' ('+fmtP(pc)+')</span></div>';});
@@ -563,6 +577,9 @@ function renderAll(rows){
   // Acesso ao Curso donut
   const degAc=Math.round(pctAcessouSP/100*360);
   h2+='<div class="card" style="margin-top:24px"><h3>Acesso ao Curso</h3><div class="d">Acessaram vs nunca acessaram (sem Povo Academy)</div><div class="donut-area">'+donutHTML('var(--teal)',degAc,'var(--red)',fmtP(pctAcessouSP),'acessou','Acessou: '+aSP.acessou+' ('+fmtP(pctAcessouSP)+') · Nunca: '+aSP.nuncaAcessou+' ('+fmtP(pctNuncaSP)+')','Acessou',aSP.acessou,'var(--teal)','Nunca',aSP.nuncaAcessou,'var(--red)')+'</div></div>';
+
+  // Inatividade — faixas de dias desde o último acesso (sem Povo Academy)
+  h2 += inatCardHbar(rowsSemPovo, R.ULT_ACESSO, TODAY_MS);
 
   // Insights Engajamento
   h2+='<div class="sec">💡 Insights — Engajamento</div><div class="ins-g">';
